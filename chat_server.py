@@ -6,13 +6,11 @@ FastAPI Web Chat Server for Nail Salon AI Receptionist
 import os
 import uuid
 import json
-import asyncio
 import httpx
 from datetime import datetime
-from typing import Optional, Generator
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from typing import Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -429,10 +427,7 @@ async def chat_stream_endpoint(chat_message: ChatMessage):
             # Generate session ID if not provided
             session_id = chat_message.session_id or str(uuid.uuid4())
             
-            # Set user context for Agno memory system
-            salon_receptionist.user_id = phone_number
-            salon_receptionist.session_id = f"{phone_number}_{datetime.now().strftime('%Y%m%d')}"
-            
+            # Session management is now handled in process_message method
             # Create or get client
             client = salon_receptionist.get_or_create_client(phone_number, chat_message.user_name)
             

@@ -62,7 +62,9 @@ class SalonReceptionist(Agent):
                 db=SqliteMemoryDb(
                     db_file="salon_memory.db",
                     table_name="user_memories"
-                )
+                ),
+                search_previous_sessions_history=True,
+                num_previous_sessions=2
             ),
             enable_agentic_memory=True,
             enable_user_memories=True,
@@ -196,14 +198,17 @@ class SalonReceptionist(Agent):
     
     def process_message(self, phone: str, message: str, user_name: Optional[str] = None) -> str:
         """
-        Process incoming SMS message using Agno's workflow capabilities
+        Process incoming SMS message using Agno's workflow capabilities with proper session management
         """
         # Create or get client
         client = self.get_or_create_client(phone, user_name)
         
-        # Set user context for Agno memory system
-        self.user_id = phone
-        self.session_id = f"{phone}_{datetime.now().strftime('%Y%m%d')}"
+        # Set proper user and session IDs for Agno memory system
+        user_id = phone  # Use phone as consistent user identifier
+        
+        # Create persistent session ID (not daily reset)
+        # Format: phone_YYYYMM (monthly sessions for salon context)
+        session_id = f"{phone}_{datetime.now().strftime('%Y%m')}"
         
         # Create context for the agent
         has_name = bool(client.name)
@@ -250,9 +255,11 @@ class SalonReceptionist(Agent):
         Preços são sempre em EUR (euros).
         """
         
-        # Use Agno's built-in conversation handling
+        # Use Agno's built-in conversation handling with proper session management
         response = self.run(
             message + f"\n\nContext: {contextual_instructions}",
+            user_id=user_id,
+            session_id=session_id,
             stream=False
         )
         
