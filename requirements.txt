@@ -6,3 +6,4 @@ sqlalchemy
 fastapi
 uvicorn[standard]
 httpx
+packaging
