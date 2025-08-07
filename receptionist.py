@@ -42,6 +42,11 @@ class SalonReceptionist(Agent):
             name="SalonReceptionist",
             model=self.xai_model,  # Using shared Grok model instance
             role="Professional nail salon receptionist",
+            tools=[
+                self.create_appointment_tool,
+                self.get_available_slots_tool, 
+                self.get_services_tool
+            ],
             instructions=[
                 "Você é uma recepcionista amigável e profissional do Elegant Nails Spa.",
                 "Você ajuda clientes a marcar consultas, responde perguntas sobre serviços e fornece informações do salão.",
@@ -80,11 +85,6 @@ class SalonReceptionist(Agent):
         
         # Load salon services
         self.services = self._load_services()
-        
-        # Register tools with the agent
-        self.add_tool(self.create_appointment_tool)
-        self.add_tool(self.get_available_slots_tool) 
-        self.add_tool(self.get_services_tool)
         
     def _load_services(self) -> List[Dict]:
         """Load available services from database"""
@@ -258,7 +258,6 @@ class SalonReceptionist(Agent):
             services_text += f"  {service['description']} ({service['duration']} minutes)\n\n"
         return services_text
     
-    @tool
     def create_appointment_tool(self, client_phone: str, client_name: str, service_name: str, date_str: str, time_str: str) -> str:
         """Create an appointment for a client. Use format DD/MM/YYYY for date and HH:MM for time."""
         try:
@@ -296,7 +295,6 @@ class SalonReceptionist(Agent):
         except Exception as e:
             return f"❌ Erro ao criar agendamento: {str(e)}"
     
-    @tool 
     def get_available_slots_tool(self, date_str: str) -> str:
         """Get available time slots for a specific date. Use format DD/MM/YYYY."""
         try:
@@ -320,7 +318,6 @@ class SalonReceptionist(Agent):
         except Exception as e:
             return f"❌ Erro ao verificar disponibilidade: {str(e)}"
     
-    @tool
     def get_services_tool(self) -> str:
         """Get list of available services with prices."""
         services_text = "💅 Serviços disponíveis:\n\n"
