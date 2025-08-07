@@ -538,6 +538,7 @@ async def webhook_sms_endpoint(webhook_message: WebhookMessage):
         }
 
 @app.post("/webhook/whatsapp")
+@app.post("/webhook/whatsapp/")
 async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
     """Handle WhatsApp Z-API webhook messages"""
     try:
