@@ -1,0 +1,20 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "python chat_server.py",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "PORT": "8000",
+        "SALON_NAME": "Elegant Nails Spa",
+        "SALON_HOURS": "Segunda a Sábado 9h-19h, Domingo 11h-17h"
+      }
+    }
+  }
+}

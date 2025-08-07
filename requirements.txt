@@ -1,0 +1,8 @@
+agno[all]
+agno[xai]
+python-dotenv
+pydantic
+sqlalchemy
+fastapi
+uvicorn[standard]
+httpx
