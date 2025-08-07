@@ -62,9 +62,7 @@ class SalonReceptionist(Agent):
                 db=SqliteMemoryDb(
                     db_file="salon_memory.db",
                     table_name="user_memories"
-                ),
-                search_previous_sessions_history=True,
-                num_previous_sessions=2
+                )
             ),
             enable_agentic_memory=True,
             enable_user_memories=True,
