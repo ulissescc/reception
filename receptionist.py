@@ -5,6 +5,8 @@ Built with Agno framework using Level 5 agentic workflows
 
 import os
 import json
+import httpx
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import sessionmaker
@@ -136,8 +138,11 @@ class SalonReceptionist(Agent):
         """Book an appointment for a client"""
         try:
             service = self.session.query(Service).get(service_id)
+            client = self.session.query(Client).get(client_id)
             if not service:
                 return {"success": False, "message": "Service not found"}
+            if not client:
+                return {"success": False, "message": "Client not found"}
             
             # Check if the time slot is still available
             conflict = self.session.query(Appointment).filter(
@@ -162,6 +167,9 @@ class SalonReceptionist(Agent):
             self.session.add(appointment)
             self.session.commit()
             
+            # Notify salon owner about the new appointment
+            asyncio.create_task(self.notify_salon_owner(client, service, appointment_datetime))
+            
             return {
                 "success": True, 
                 "appointment_id": appointment.id,
@@ -171,6 +179,53 @@ class SalonReceptionist(Agent):
         except Exception as e:
             self.session.rollback()
             return {"success": False, "message": f"Booking failed: {str(e)}"}
+    
+    async def notify_salon_owner(self, client: Client, service: Service, appointment_datetime: datetime):
+        """Notify salon owner Márcia Damásio about new appointment"""
+        try:
+            owner_phone = "+351960136059"  # Márcia Damásio's phone
+            instance_id = "3E3D83F891B75008327D764AFE850DAC"
+            client_token = "Fbb71b79c5fbe4568ad040a6d609bd5f2S"
+            
+            # Format appointment details in Portuguese
+            formatted_date = appointment_datetime.strftime("%d/%m/%Y às %H:%M")
+            client_name = client.name or "Cliente sem nome"
+            
+            notification_message = f"""📅 NOVO AGENDAMENTO - Elegant Nails Spa
+
+👤 Cliente: {client_name}
+📞 Telefone: {client.phone}
+💅 Serviço: {service.name}
+💰 Preço: €{service.price:.2f}
+⏰ Data/Hora: {formatted_date}
+⏱️ Duração: {service.duration_minutes} minutos
+
+📋 Detalhes: {service.description}"""
+            
+            # Send notification via Z-API
+            z_api_url = f"https://api.z-api.io/instances/{instance_id}/token/14BDD904C38209CB129D97A7/send-text"
+            
+            async with httpx.AsyncClient() as client_http:
+                response = await client_http.post(
+                    z_api_url,
+                    json={
+                        "phone": owner_phone,
+                        "message": notification_message
+                    },
+                    headers={
+                        "Content-Type": "application/json",
+                        "Client-Token": client_token
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    print(f"✅ Notification sent to salon owner {owner_phone}")
+                else:
+                    print(f"❌ Failed to notify salon owner: {response.status_code} - {response.text}")
+                    
+        except Exception as e:
+            print(f"❌ Error notifying salon owner: {str(e)}")
     
     def update_client_name(self, phone: str, name: str) -> Dict:
         """Update client name in database"""
