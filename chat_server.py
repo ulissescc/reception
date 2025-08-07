@@ -565,11 +565,12 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
             # Get receptionist instance and process message
             salon_receptionist = get_receptionist()
             
-            # Process the message (Portuguese receptionist)
+            # Process the message (Portuguese receptionist) - use webhook name but confirm
+            webhook_name = webhook_data.senderName or webhook_data.chatName
             ai_response = salon_receptionist.process_message(
                 phone=phone,
                 message=message,
-                user_name=webhook_data.senderName
+                user_name=webhook_name  # Use webhook name but AI will confirm it's correct
             )
             
             print(f"🤖 AI Response: \"{ai_response}\"")
