@@ -586,7 +586,7 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
                     },
                     headers={
                         "Content-Type": "application/json",
-                        "Client-Token": "14BDD904C38209CB129D97A7"
+                        "Client-Token": "Fbb71b79c5fbe4568ad040a6d609bd5f2S"
                     },
                     timeout=10.0
                 )
