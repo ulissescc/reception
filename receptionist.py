@@ -199,18 +199,24 @@ class SalonReceptionist(Agent):
             
             # Format appointment details in Portuguese
             formatted_date = appointment_datetime.strftime("%d/%m/%Y às %H:%M")
-            client_name = client.name or "Cliente sem nome"
+            formatted_day = appointment_datetime.strftime("%A").replace("Monday", "Segunda").replace("Tuesday", "Terça").replace("Wednesday", "Quarta").replace("Thursday", "Quinta").replace("Friday", "Sexta").replace("Saturday", "Sábado").replace("Sunday", "Domingo")
             
-            notification_message = f"""📅 NOVO AGENDAMENTO - Elegant Nails Spa
+            # Better client name handling
+            client_display = client.name if client.name else f"Cliente ({client.phone[-4:]})"
+            
+            notification_message = f"""🎉 NOVO AGENDAMENTO CONFIRMADO! 
 
-👤 Cliente: {client_name}
-📞 Telefone: {client.phone}
+👤 Cliente: {client_display}
+📞 Contacto: {client.phone}
+
 💅 Serviço: {service.name}
-💰 Preço: €{service.price:.2f}
-⏰ Data/Hora: {formatted_date}
-⏱️ Duração: {service.duration_minutes} minutos
+💰 Valor: €{service.price:.2f}
+📅 Data: {formatted_date} ({formatted_day})
+⏱️ Duração: {service.duration_minutes}min
 
-📋 Detalhes: {service.description}"""
+📝 Descrição: {service.description}
+
+✨ Agendado via WhatsApp AI"""
             
             # Send notification via Z-API
             z_api_url = f"https://api.z-api.io/instances/{instance_id}/token/14BDD904C38209CB129D97A7/send-text"
@@ -265,8 +271,13 @@ class SalonReceptionist(Agent):
             # Parse date and time
             appointment_datetime = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
             
-            # Get or create client
+            # Get or create client and update name if provided
             client = self.get_or_create_client(client_phone, client_name)
+            
+            # Update client name if provided and different
+            if client_name and client_name.strip() and (not client.name or client.name != client_name.strip()):
+                client.name = client_name.strip()
+                self.session.commit()
             
             # Find service by name
             service = None
