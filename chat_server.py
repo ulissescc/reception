@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from receptionist import SalonReceptionist
+from salon_workflow import salon_workflow
 
 # Load environment variables
 load_dotenv()
@@ -560,8 +561,8 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
             # Get receptionist instance and process message
             salon_receptionist = get_receptionist()
             
-            # Process the message (Portuguese receptionist) - don't use webhook name
-            ai_response = salon_receptionist.process_message(
+            # Process the message using autonomous workflow (Level 5 Agentic)
+            ai_response = await salon_workflow.process_message(
                 phone=phone,
                 message=message,
                 user_name=None  # Don't use webhook name - let AI ask for name
@@ -569,27 +570,34 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
             
             print(f"🤖 AI Response: \"{ai_response}\"")
             
-            # Send response back via Z-API
-            z_api_url = f"https://api.z-api.io/instances/{webhook_data.instanceId}/token/14BDD904C38209CB129D97A7/send-text"
+            # Note: The autonomous workflow handles message sending via MessageQueue
+            # We don't need to send a direct response here as messages are sent autonomously
             
-            async with httpx.AsyncClient() as client:
-                z_api_response = await client.post(
-                    z_api_url,
-                    json={
-                        "phone": phone,
-                        "message": ai_response
-                    },
-                    headers={
-                        "Content-Type": "application/json",
-                        "Client-Token": "Fbb71b79c5fbe4568ad040a6d609bd5f2S"
-                    },
-                    timeout=10.0
-                )
+            if ai_response and ai_response.strip():
+                # Only send direct response if workflow returned something
+                # (for non-autonomous responses like general inquiries)
+                z_api_url = f"https://api.z-api.io/instances/{webhook_data.instanceId}/token/14BDD904C38209CB129D97A7/send-text"
                 
-                if z_api_response.status_code == 200:
-                    print(f"✅ Response sent successfully to {phone}")
-                else:
-                    print(f"❌ Failed to send Z-API response: {z_api_response.status_code} - {z_api_response.text}")
+                async with httpx.AsyncClient() as client:
+                    z_api_response = await client.post(
+                        z_api_url,
+                        json={
+                            "phone": phone,
+                            "message": ai_response
+                        },
+                        headers={
+                            "Content-Type": "application/json",
+                            "Client-Token": "Fbb71b79c5fbe4568ad040a6d609bd5f2S"
+                        },
+                        timeout=10.0
+                    )
+                    
+                    if z_api_response.status_code == 200:
+                        print(f"✅ Direct response sent successfully to {phone}")
+                    else:
+                        print(f"❌ Failed to send Z-API response: {z_api_response.status_code} - {z_api_response.text}")
+            else:
+                print("ℹ️ No direct response needed - autonomous workflow handling messages")
         
         return {"status": "received", "processed": webhook_data.type == "ReceivedCallback"}
         
