@@ -584,6 +584,10 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
                         "phone": phone,
                         "message": ai_response
                     },
+                    headers={
+                        "Content-Type": "application/json",
+                        "Client-Token": "14BDD904C38209CB129D97A7"
+                    },
                     timeout=10.0
                 )
                 
