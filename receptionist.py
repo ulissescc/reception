@@ -193,7 +193,7 @@ class SalonReceptionist(Agent):
     async def notify_salon_owner(self, client: Client, service: Service, appointment_datetime: datetime):
         """Notify salon owner Márcia Damásio about new appointment"""
         try:
-            owner_phone = "+351960136059"  # Márcia Damásio's phone
+            owner_phone = "+351910294250"  # Márcia Damásio's phone
             instance_id = "3E3D83F891B75008327D764AFE850DAC"
             client_token = "Fbb71b79c5fbe4568ad040a6d609bd5f2S"
             
