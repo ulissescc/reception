@@ -17,6 +17,7 @@ from agno.storage.sqlite import SqliteStorage
 from agno.memory.v2.memory import Memory
 from agno.memory.v2.db.sqlite import SqliteMemoryDb
 from agno.models.xai import xAI
+from agno.tools import tool
 
 from database import init_database, Client, Service, Appointment, AvailabilitySlot
 from dotenv import load_dotenv
@@ -52,7 +53,10 @@ class SalonReceptionist(Agent):
                 "Lembre-se das preferências dos clientes e consultas anteriores usando os nomes deles.",
                 "Se não conseguir atender uma solicitação, ofereça educadamente para conectá-los com um membro da equipe.",
                 "Seja conversacional e use um tom caloroso e acolhedor nas suas respostas.",
-                "Todos os preços devem ser apresentados em EUR (euros)."
+                "Todos os preços devem ser apresentados em EUR (euros).",
+                "IMPORTANTE: Quando um cliente confirmar um agendamento, use a ferramenta create_appointment_tool para realmente criar o agendamento na base de dados.",
+                "Use get_services_tool para mostrar serviços e get_available_slots_tool para verificar horários disponíveis.",
+                "Sempre confirme os detalhes antes de criar o agendamento: nome, serviço, data e hora."
             ],
             storage=SqliteStorage(
                 table_name="salon_agent_sessions",
@@ -76,6 +80,11 @@ class SalonReceptionist(Agent):
         
         # Load salon services
         self.services = self._load_services()
+        
+        # Register tools with the agent
+        self.add_tool(self.create_appointment_tool)
+        self.add_tool(self.get_available_slots_tool) 
+        self.add_tool(self.get_services_tool)
         
     def _load_services(self) -> List[Dict]:
         """Load available services from database"""
@@ -245,8 +254,79 @@ class SalonReceptionist(Agent):
         """Get formatted services information"""
         services_text = "Our Services:\n\n"
         for service in self.services:
-            services_text += f"• {service['name']} - ${service['price']:.2f}\n"
+            services_text += f"• {service['name']} - €{service['price']:.2f}\n"
             services_text += f"  {service['description']} ({service['duration']} minutes)\n\n"
+        return services_text
+    
+    @tool
+    def create_appointment_tool(self, client_phone: str, client_name: str, service_name: str, date_str: str, time_str: str) -> str:
+        """Create an appointment for a client. Use format DD/MM/YYYY for date and HH:MM for time."""
+        try:
+            # Parse date and time
+            appointment_datetime = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+            
+            # Get or create client
+            client = self.get_or_create_client(client_phone, client_name)
+            
+            # Find service by name
+            service = None
+            for svc in self.services:
+                if svc['name'].lower() in service_name.lower():
+                    service = svc
+                    break
+            
+            if not service:
+                return f"Serviço '{service_name}' não encontrado. Serviços disponíveis: {', '.join([s['name'] for s in self.services])}"
+            
+            # Book the appointment
+            result = self.book_appointment(
+                client_id=client.id,
+                service_id=service['id'],
+                appointment_datetime=appointment_datetime,
+                notes=f"Agendamento via WhatsApp"
+            )
+            
+            if result['success']:
+                return f"✅ Agendamento criado com sucesso! {client_name} tem consulta de {service['name']} marcada para {date_str} às {time_str}."
+            else:
+                return f"❌ Erro ao criar agendamento: {result['message']}"
+                
+        except ValueError as e:
+            return f"❌ Erro no formato da data/hora. Use DD/MM/YYYY e HH:MM"
+        except Exception as e:
+            return f"❌ Erro ao criar agendamento: {str(e)}"
+    
+    @tool 
+    def get_available_slots_tool(self, date_str: str) -> str:
+        """Get available time slots for a specific date. Use format DD/MM/YYYY."""
+        try:
+            # Parse date
+            target_date = datetime.strptime(date_str, "%d/%m/%Y")
+            
+            # Get available slots
+            available_slots = self.check_availability(target_date, 60)  # 60 min default
+            
+            if not available_slots:
+                return f"❌ Não há horários disponíveis para {date_str}"
+            
+            slots_text = f"⏰ Horários disponíveis para {date_str}:\n"
+            for slot in available_slots[:5]:  # Show first 5 slots
+                slots_text += f"• {slot.strftime('%H:%M')}\n"
+                
+            return slots_text
+            
+        except ValueError:
+            return "❌ Erro no formato da data. Use DD/MM/YYYY"
+        except Exception as e:
+            return f"❌ Erro ao verificar disponibilidade: {str(e)}"
+    
+    @tool
+    def get_services_tool(self) -> str:
+        """Get list of available services with prices."""
+        services_text = "💅 Serviços disponíveis:\n\n"
+        for service in self.services:
+            services_text += f"• **{service['name']}** - €{service['price']:.2f}\n"
+            services_text += f"  {service['description']} ({service['duration']} minutos)\n\n"
         return services_text
     
     def process_message(self, phone: str, message: str, user_name: Optional[str] = None) -> str:
