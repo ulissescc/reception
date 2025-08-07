@@ -14,8 +14,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from receptionist import SalonReceptionist
-from salon_workflow import salon_workflow
+from receptionist import process_sms
 
 # Load environment variables
 load_dotenv()
@@ -26,15 +25,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("XAI_API_KEY", "")
 # Initialize FastAPI app
 app = FastAPI(title="Nail Salon AI Receptionist Chat", version="1.0.0")
 
-# Global receptionist instance
-receptionist = None
-
-def get_receptionist():
-    """Get or create the salon receptionist instance"""
-    global receptionist
-    if receptionist is None:
-        receptionist = SalonReceptionist()
-    return receptionist
+# Use the global process_sms function from receptionist module
 
 # Request/Response models for webhook (realistic SMS structure)
 class WebhookMessage(BaseModel):
@@ -386,14 +377,11 @@ async def chat_interface():
 async def chat_endpoint(chat_message: ChatMessage):
     """Handle chat messages from the web interface (non-streaming)"""
     try:
-        # Get receptionist instance
-        salon_receptionist = get_receptionist()
-        
         # Use provided phone number or generate session-based one
         phone_number = chat_message.phone_number or f"+1555{chat_message.session_id or uuid.uuid4().hex[:6]}"
         
-        # Process the message (non-streaming)
-        response = salon_receptionist.process_message(
+        # Process the message using original receptionist (natural AI conversation)
+        response = process_sms(
             phone=phone_number,
             message=chat_message.message,
             user_name=chat_message.user_name
@@ -415,72 +403,34 @@ async def chat_endpoint(chat_message: ChatMessage):
 
 @app.post("/chat/stream")
 async def chat_stream_endpoint(chat_message: ChatMessage):
-    """Handle streaming chat messages using Server-Sent Events"""
+    """Handle streaming chat messages using Server-Sent Events (simplified to use original receptionist)"""
     
     def generate_stream():
         try:
-            # Get receptionist instance
-            salon_receptionist = get_receptionist()
-            
             # Use provided phone number or generate session-based one
             phone_number = chat_message.phone_number or f"+1555{chat_message.session_id or uuid.uuid4().hex[:6]}"
             
             # Generate session ID if not provided
             session_id = chat_message.session_id or str(uuid.uuid4())
             
-            # Session management is now handled in process_message method
-            # Create or get client
-            client = salon_receptionist.get_or_create_client(phone_number, chat_message.user_name)
-            
-            # Create context for the agent
-            context = {
-                "client_phone": phone_number,
-                "client_name": client.name or "valued client",
-                "salon_name": os.getenv("SALON_NAME", "Elegant Nails Spa"),
-                "salon_hours": os.getenv("SALON_HOURS", "Mon-Sat 9AM-7PM, Sun 11AM-5PM"),
-                "services": salon_receptionist.services,
-                "current_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Add context to agent instructions for this conversation
-            contextual_instructions = f"""
-            Current context:
-            - Client phone: {context['client_phone']}
-            - Client name: {context['client_name']}
-            - Salon: {context['salon_name']}
-            - Hours: {context['salon_hours']}
-            - Current time: {context['current_time']}
-            
-            Available services: {json.dumps(context['services'], indent=2)}
-            
-            For appointment booking:
-            1. Get the service they want
-            2. Suggest available time slots
-            3. Confirm the appointment details
-            4. Book the appointment when confirmed
-            
-            Be conversational and helpful!
-            """
-            
             # Send initial metadata
             yield f"data: {json.dumps({'type': 'metadata', 'session_id': session_id, 'timestamp': datetime.now().isoformat()})}\n\n"
             
-            # Use Agno's built-in streaming capability
-            response = salon_receptionist.run(
-                chat_message.message + f"\n\nContext: {contextual_instructions}",
-                stream=True
+            # Process message using original receptionist (returns complete response)
+            response = process_sms(
+                phone=phone_number,
+                message=chat_message.message,
+                user_name=chat_message.user_name
             )
             
-            # Stream the response
-            for chunk in response:
-                if hasattr(chunk, 'content') and chunk.content:
-                    data = {
-                        'type': 'content',
-                        'content': chunk.content,
-                        'session_id': session_id,
-                        'timestamp': datetime.now().isoformat()
-                    }
-                    yield f"data: {json.dumps(data)}\n\n"
+            # Send the complete response (original receptionist is already natural)
+            data = {
+                'type': 'content',
+                'content': response,
+                'session_id': session_id,
+                'timestamp': datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(data)}\n\n"
             
             # Send completion signal
             yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
@@ -507,14 +457,11 @@ async def chat_stream_endpoint(chat_message: ChatMessage):
 async def webhook_sms_endpoint(webhook_message: WebhookMessage):
     """Handle SMS webhook - only receives phone and message"""
     try:
-        # Get receptionist instance
-        salon_receptionist = get_receptionist()
-        
-        # Process the message without a user name (will be asked by agent)
-        response = salon_receptionist.process_message(
+        # Process the message using original receptionist (natural AI conversation)
+        response = process_sms(
             phone=webhook_message.phone_number,
             message=webhook_message.message,
-            user_name=None  # No name provided - agent will ask
+            user_name=None  # No name provided - agent will ask naturally
         )
         
         return {
@@ -558,24 +505,17 @@ async def whatsapp_webhook_endpoint(webhook_data: WhatsAppWebhook):
             
             print(f"📞 Processing message from {phone}: \"{message}\"")
             
-            # Get receptionist instance and process message
-            salon_receptionist = get_receptionist()
-            
-            # Process the message using autonomous workflow (Level 5 Agentic)
-            ai_response = await salon_workflow.process_message(
+            # Process the message using original receptionist (natural AI conversation)
+            ai_response = process_sms(
                 phone=phone,
                 message=message,
-                user_name=None  # Don't use webhook name - let AI ask for name
+                user_name=None  # Don't use webhook name - let AI ask for name naturally
             )
             
             print(f"🤖 AI Response: \"{ai_response}\"")
             
-            # Note: The autonomous workflow handles message sending via MessageQueue
-            # We don't need to send a direct response here as messages are sent autonomously
-            
+            # Send the AI response directly (original receptionist handles everything)
             if ai_response and ai_response.strip():
-                # Only send direct response if workflow returned something
-                # (for non-autonomous responses like general inquiries)
                 z_api_url = f"https://api.z-api.io/instances/{webhook_data.instanceId}/token/14BDD904C38209CB129D97A7/send-text"
                 
                 async with httpx.AsyncClient() as client:

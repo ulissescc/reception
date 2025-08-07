@@ -118,31 +118,51 @@ class SalonReceptionist(Agent):
     
     def check_availability(self, date: datetime, duration_minutes: int) -> List[datetime]:
         """Check available time slots for a given date and duration"""
-        # Simple availability check - assume 9AM to 7PM, every 15 minutes
-        # In a real system, this would check against existing appointments and staff schedules
-        
-        start_hour = 9  # 9 AM
-        end_hour = 19   # 7 PM
-        slot_interval = 15  # 15 minute intervals
-        
-        available_slots = []
-        current_time = date.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-        end_time = date.replace(hour=end_hour, minute=0, second=0, microsecond=0)
-        
-        while current_time + timedelta(minutes=duration_minutes) <= end_time:
-            # Check if this slot conflicts with existing appointments
-            conflict = self.session.query(Appointment).filter(
-                Appointment.appointment_datetime <= current_time,
-                Appointment.appointment_datetime + timedelta(minutes=Appointment.duration_minutes) > current_time,
-                Appointment.status.in_(['scheduled', 'confirmed'])
-            ).first()
+        try:
+            # Simple availability check - assume 9AM to 7PM, every 15 minutes
+            # In a real system, this would check against existing appointments and staff schedules
             
-            if not conflict:
-                available_slots.append(current_time)
+            start_hour = 9  # 9 AM
+            end_hour = 19   # 7 PM
+            slot_interval = 15  # 15 minute intervals
             
-            current_time += timedelta(minutes=slot_interval)
+            available_slots = []
+            current_time = date.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+            end_time = date.replace(hour=end_hour, minute=0, second=0, microsecond=0)
             
-        return available_slots[:10]  # Return first 10 available slots
+            while current_time + timedelta(minutes=duration_minutes) <= end_time:
+                # Check if this slot conflicts with existing appointments
+                # Get all appointments for this time period and check conflicts manually
+                appointments = self.session.query(Appointment).join(Service).filter(
+                    Appointment.appointment_datetime.between(
+                        current_time - timedelta(hours=2),  # Look 2 hours before for potential conflicts
+                        current_time + timedelta(hours=2)   # Look 2 hours after for potential conflicts
+                    ),
+                    Appointment.status.in_(['scheduled', 'confirmed'])
+                ).all()
+                
+                # Check for conflicts manually
+                conflict = False
+                for appointment in appointments:
+                    appointment_start = appointment.appointment_datetime
+                    appointment_end = appointment_start + timedelta(minutes=appointment.service.duration_minutes)
+                    slot_end = current_time + timedelta(minutes=duration_minutes)
+                    
+                    # Check if appointment overlaps with our proposed slot
+                    if (appointment_start < slot_end and appointment_end > current_time):
+                        conflict = True
+                        break
+                
+                if not conflict:
+                    available_slots.append(current_time)
+                
+                current_time += timedelta(minutes=slot_interval)
+                
+            return available_slots[:10]  # Return first 10 available slots
+            
+        except Exception as e:
+            print(f"❌ Error checking availability: {str(e)}")
+            return []  # Return empty list on error
     
     def book_appointment(self, client_id: int, service_id: int, appointment_datetime: datetime, notes: str = "") -> Dict:
         """Book an appointment for a client"""
@@ -155,11 +175,27 @@ class SalonReceptionist(Agent):
                 return {"success": False, "message": "Client not found"}
             
             # Check if the time slot is still available
-            conflict = self.session.query(Appointment).filter(
-                Appointment.appointment_datetime <= appointment_datetime,
-                Appointment.appointment_datetime + timedelta(minutes=service.duration_minutes) > appointment_datetime,
+            # Get all appointments around this time and check for conflicts manually
+            nearby_appointments = self.session.query(Appointment).join(Service).filter(
+                Appointment.appointment_datetime.between(
+                    appointment_datetime - timedelta(hours=2),
+                    appointment_datetime + timedelta(hours=2)
+                ),
                 Appointment.status.in_(['scheduled', 'confirmed'])
-            ).first()
+            ).all()
+            
+            # Check for conflicts manually
+            conflict = False
+            appointment_end = appointment_datetime + timedelta(minutes=service.duration_minutes)
+            
+            for existing_appointment in nearby_appointments:
+                existing_start = existing_appointment.appointment_datetime
+                existing_end = existing_start + timedelta(minutes=existing_appointment.service.duration_minutes)
+                
+                # Check if appointments overlap
+                if (existing_start < appointment_end and existing_end > appointment_datetime):
+                    conflict = True
+                    break
             
             if conflict:
                 return {"success": False, "message": "Time slot is no longer available"}
@@ -313,22 +349,30 @@ class SalonReceptionist(Agent):
             # Parse date
             target_date = datetime.strptime(date_str, "%d/%m/%Y")
             
+            # Check if date is in the past
+            if target_date.date() < datetime.now().date():
+                return f"❌ Não posso verificar horários para datas passadas. Por favor escolha uma data futura."
+            
             # Get available slots
             available_slots = self.check_availability(target_date, 60)  # 60 min default
             
             if not available_slots:
-                return f"❌ Não há horários disponíveis para {date_str}"
+                return f"❌ Não há horários disponíveis para {date_str}. Por favor tente outra data ou contacte-nos diretamente."
             
             slots_text = f"⏰ Horários disponíveis para {date_str}:\n"
             for slot in available_slots[:5]:  # Show first 5 slots
                 slots_text += f"• {slot.strftime('%H:%M')}\n"
+            
+            if len(available_slots) > 5:
+                slots_text += f"\n📞 Temos mais horários disponíveis! Contacte-nos para mais opções."
                 
             return slots_text
             
         except ValueError:
-            return "❌ Erro no formato da data. Use DD/MM/YYYY"
+            return f"❌ Erro no formato da data. Use DD/MM/YYYY (exemplo: {datetime.now().strftime('%d/%m/%Y')})"
         except Exception as e:
-            return f"❌ Erro ao verificar disponibilidade: {str(e)}"
+            print(f"Error in get_available_slots_tool: {str(e)}")
+            return f"❌ Erro ao verificar disponibilidade. Por favor tente novamente ou contacte-nos diretamente."
     
     def get_services_tool(self) -> str:
         """Get list of available services with prices."""
